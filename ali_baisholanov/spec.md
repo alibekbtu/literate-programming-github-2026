@@ -2,17 +2,18 @@
 
 ## Purpose and interface
 
-Implement `top_words(text)` in `top_words.py` using Python 3. It returns the
-10 most frequent words in an article, with their occurrence counts. The text
+Implement `top_words(text)` in `top_words.py` using Python 3.10 or later. It
+returns the 10 most frequent words in an article, with their occurrence counts. The text
 may contain English, Russian, Kazakh, or a mixture of languages.
 
-The input must be a Python `str`. For every other input type, raise `TypeError`;
+The input must be a Python `str`, including subclasses of `str` (as checked
+by `isinstance(text, str)`). For every other input type, raise `TypeError`;
 the exception message is unspecified. Do not coerce values to strings. The
 function accepts the article text itself, not a filename or URL, and performs
 no file access, network access, printing, or interactive input.
 
-Return a `list` of `(word, count)` tuples, where `word` is a `str` and `count`
-is a positive `int`. Return `[]` if there are no words. If there are fewer than
+Return a `list` of `(word, count)` tuples, where `word` is a plain `str`
+(not a subclass) and `count` is a positive `int`. Return `[]` if there are no words. If there are fewer than
 10 distinct words, return all of them; otherwise return exactly 10. The limit
 is fixed, with no additional arguments.
 
@@ -25,13 +26,14 @@ Apply these steps in this order:
 3. Normalize the result to NFC again.
 4. Split that result into maximal, nonempty, consecutive runs of characters
    for which Python's `str.isalpha()` returns `True`. Each run is one word.
-   Every other character is a separator; separators are never deleted in a
-   way that joins the words on their two sides.
+   Every other character is a separator.
 5. Count every occurrence of each resulting word across the complete text.
 
 These definitions use the Unicode character data supplied by the Python
-runtime, without locale-specific rules. NFC makes canonically equivalent
-spellings equal; compatibility normalization (NFKC) is not performed.
+runtime, without locale-specific rules. Results for recently added Unicode
+characters can differ between Python versions; use the same Python version
+and Unicode data version when reproducing results. NFC makes canonically
+equivalent spellings equal; compatibility normalization (NFKC) is not performed.
 Case folding is applied before splitting, including any expansions it makes.
 Combining marks that remain after the transformations are separators because
 they do not satisfy `isalpha()`.
@@ -52,13 +54,21 @@ transformed word strings in ascending Python string order (lexicographic
 Unicode code point order, with a shorter prefix preceding its extension).
 Apply this ordering before taking the first 10 entries. Do not include extra
 entries tied with the tenth word. Input order and locale do not break ties.
+In particular, the Kazakh example below uses code point order, not Kazakh
+alphabetical order, just like the cross-script tie example.
 
 ## Acceptance examples
 
-Each input cell is a Python literal. Escape sequences represent actual
-characters; for example, `\n` is a newline and `\u0301` is a combining acute
+Each input cell is a Python literal unless noted below. Escape sequences
+represent actual characters; for example, `\n` is a newline and `\u0301` is a combining acute
 accent. Expected results are exact Python values. A `TypeError` entry means
 the call must raise that exception. These cases are independent calls.
+The `bytearray(b'cat')` cell is a Python constructor expression rather than
+a literal.
+
+For subclass coverage, given `class Article(str): pass`, the call
+`top_words(Article("Cat cat"))` must return `[("cat", 2)]`, with
+`type(result[0][0]) is str`.
 
 | Decision exercised | Input | Expected result |
 | --- | --- | --- |
@@ -79,11 +89,14 @@ the call must raise that exception. These cases are independent calls.
 | Emoji separates words | `'hi😀hi'` | `[('hi', 2)]` |
 | NFC combines canonically equivalent spellings | `'café cafe\u0301 CAFÉ'` | `[('café', 3)]` |
 | Retain accents | `'cafe café'` | `[('cafe', 1), ('café', 1)]` |
+| Case folding merges Greek final and ordinary sigma | `'ΟΔΟΣ οδος οδοσ'` | `[('οδοσ', 3)]` |
 | Case folding may expand a letter | `'Straße STRASSE'` | `[('strasse', 2)]` |
 | Marks remaining after NFC separate words | `'x\u0301y'` | `[('x', 1), ('y', 1)]` |
 | Transform before splitting; case folding introduces a mark | `'İX'` | `[('i', 1), ('x', 1)]` |
 | Do not apply compatibility normalization | `'Ａ A'` | `[('a', 1), ('ａ', 1)]` |
 | Accept other scripts | `'猫 猫 dog'` | `[('猫', 2), ('dog', 1)]` |
+| Text without spaces stays in one alphabetic run | `'猫が好き'` | `[('猫が好き', 1)]` |
+| Devanagari vowel marks separate letters | `'किताब'` | `[('क', 1), ('त', 1), ('ब', 1)]` |
 | Adjacent scripts stay in one word | `'catкот cat кот'` | `[('cat', 1), ('catкот', 1), ('кот', 1)]` |
 | Do not strip markup | `'<b>Cat</b>'` | `[('b', 2), ('cat', 1)]` |
 | No stop-word filtering or stemming | `'the and the cats cat'` | `[('the', 2), ('and', 1), ('cat', 1), ('cats', 1)]` |
@@ -95,6 +108,8 @@ the call must raise that exception. These cases are independent calls.
 | Reject missing text | `None` | `TypeError` |
 | Reject numbers | `123` | `TypeError` |
 | Reject encoded bytes | `b'cat'` | `TypeError` |
+| Reject booleans | `True` | `TypeError` |
+| Reject mutable encoded bytes | `bytearray(b'cat')` | `TypeError` |
 | Reject collections | `['cat']` | `TypeError` |
 
 ## Scope
@@ -102,7 +117,12 @@ the call must raise that exception. These cases are independent calls.
 This is a specification of a function, not a command-line program or web UI.
 The chosen tokenization is deliberately mechanical: contractions and
 hyphenated expressions split as specified above. Language-specific linguistic
-analysis is outside the scope. No particular counting algorithm, exact error
+analysis is outside the scope. Accepting letters from every script does not
+imply linguistic word segmentation: Chinese, Japanese, or Thai text without
+separators stays in one word per maximal alphabetic run. Vowel signs and
+other combining marks in scripts such as Devanagari, Arabic, and Hebrew
+that remain after normalization act as separators and can split linguistic
+words into pieces. No particular counting algorithm, exact error
 message, or performance benchmark is required.
 
 ## Source
